@@ -1,0 +1,63 @@
+# Pomocníci / Helpers
+# CZ: Vytvoř přes Nastavení → Zařízení a služby → Pomocníci (nebo vlož do configuration.yaml).
+# EN: Create via Settings → Devices & services → Helpers (or paste into configuration.yaml).
+
+input_boolean:
+  elektrokotel_rizeni_podle_prebytku:
+    name: Elektrokotel – řídit podle přebytků
+    icon: mdi:solar-power-variant
+
+input_number:
+  elektrokotel_max_vykon:
+    name: Elektrokotel – max. výkon
+    min: 1
+    max: 6            # Ray 6 KE; pro 9/12/14 KE upravit / adjust for 9/12/14 KE
+    step: 1
+    unit_of_measurement: kW
+    initial: 6
+    icon: mdi:lightning-bolt
+  elektrokotel_min_nabiti_baterie:
+    name: Elektrokotel – nejdřív nabít baterii na
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    initial: 90
+    icon: mdi:battery-charging-90
+  elektrokotel_teplota_vystupu:
+    name: Elektrokotel – teplota výstupu při topení
+    min: 30
+    max: 80
+    step: 1
+    unit_of_measurement: °C
+    initial: 60
+    icon: mdi:thermometer-water
+  elektrokotel_rezerva:
+    name: Elektrokotel – rezerva (tolerance odběru ze sítě)
+    min: 0
+    max: 1000
+    step: 50
+    unit_of_measurement: W
+    initial: 300
+    icon: mdi:transmission-tower
+  elektrokotel_aktualni_stupen:
+    name: Elektrokotel – aktuální stupeň (řízený)
+    min: 0
+    max: 6
+    step: 1
+    unit_of_measurement: kW
+    icon: mdi:stairs
+  elektrokotel_max_teplota_v_dome:
+    name: Elektrokotel – netopit, když je v domě víc než
+    min: 18
+    max: 30
+    step: 0.5
+    unit_of_measurement: °C
+    initial: 24
+    icon: mdi:home-thermometer
+
+input_datetime:
+  elektrokotel_posledni_zmena_stupne:
+    name: Elektrokotel – poslední změna stupně
+    has_date: true
+    has_time: true
