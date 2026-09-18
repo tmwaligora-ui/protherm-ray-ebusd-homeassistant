@@ -1,0 +1,24 @@
+# CZ: Při změně slideru „Teplota výstupu při topení“ zapíše hodnotu do kotle jako
+#     max. teplotu výstupu (registr FlowsetHcMax, d.71). V samostatném režimu kotel topí
+#     na min(teplota nastavená na panelu, d.71). Zapisuje se JEN při změně – d.71 je
+#     v EEPROM kotle, nezapisovat cyklicky.
+# EN: When the "flow temperature" slider changes, write it to the boiler as the maximum
+#     flow temperature (register FlowsetHcMax, d.71). In standalone mode the boiler heats
+#     to min(panel setpoint, d.71). Written ONLY on change – d.71 lives in the boiler's
+#     EEPROM, do not write it periodically.
+
+id: elektrokotel_teplota_d71
+alias: Elektrokotel – teplota výstupu do kotle (d.71)
+description: >-
+  Při změně slideru „Teplota výstupu při topení“ zapíše hodnotu do kotle jako max. teplotu
+  výstupu (registr FlowsetHcMax, d.71).
+mode: queued
+triggers:
+  - trigger: state
+    entity_id: input_number.elektrokotel_teplota_vystupu
+conditions: []
+actions:
+  - action: mqtt.publish
+    data:
+      topic: ebusd/bai/FlowsetHcMax/set
+      payload: '{{ states("input_number.elektrokotel_teplota_vystupu") | int }}'
