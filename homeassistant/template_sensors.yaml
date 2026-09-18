@@ -1,0 +1,46 @@
+# Template senzory / Template sensors
+# CZ: Vlož do configuration.yaml pod klíč `template:` (nebo vytvoř přes UI: Pomocníci → Šablona).
+# EN: Put under the `template:` key in configuration.yaml (or create via UI: Helpers → Template).
+
+template:
+  - sensor:
+      # CZ: Průměrná teplota v domě z pokojových čidel – upravit seznam entit.
+      # EN: Average indoor temperature from room sensors – adjust the entity list.
+      - name: Průměrná teplota v domě
+        unique_id: prumerna_teplota_v_dome
+        unit_of_measurement: °C
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {% set ids = ['sensor.living_room_temperature',
+                        'sensor.kitchen_temperature',
+                        'sensor.bedroom_temperature',
+                        'sensor.office_temperature',
+                        'sensor.big_room_temperature'] %}
+          {% set vals = ids | map('states') | reject('in', ['unknown','unavailable','none']) | map('float') | list %}
+          {{ (vals | sum / vals | count) | round(1) if vals | count > 0 else none }}
+
+      # CZ: Odhad příkonu kotle – v samostatném režimu kotel topí přesně na d.00, když je ve stavu S.4.
+      #     Ověřeno měřením: d.00 = 1…6 → +1,0…6,0 kW. (Modulace v % se u Ray nehýbe, nepoužívat.)
+      # EN: Boiler power estimate – in standalone mode the boiler runs exactly at d.00 while in S.4.
+      #     Verified by measurement: d.00 = 1…6 → +1.0…6.0 kW. (Modulation % never changes on Ray.)
+      - name: Elektrokotel – příkon (odhad)
+        unique_id: elektrokotel_prikon_odhad
+        unit_of_measurement: kW
+        device_class: power
+        state_class: measurement
+        state: >-
+          {% set s = states('sensor.heating_ebusd_bai_statenumber') %}
+          {% set p = states('sensor.heating_ebusd_bai_partloadhckw') | float(0) %}
+          {{ p if s == '4' else 0 }}
+
+  - binary_sensor:
+      # S.4 = topí / heating
+      - name: Elektrokotel topí
+        unique_id: elektrokotel_topi
+        device_class: heat
+        state: "{{ is_state('sensor.heating_ebusd_bai_statenumber', '4') }}"
+      - name: Elektrokotel čerpadlo běží
+        unique_id: elektrokotel_cerpadlo_bezi
+        device_class: running
+        state: "{{ is_state('sensor.heating_ebusd_bai_status01_pumpstate', 'on') }}"
