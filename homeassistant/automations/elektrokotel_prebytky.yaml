@@ -1,0 +1,140 @@
+# Elektrokotel – řízení podle přebytků FVE / Electric boiler – PV surplus control
+#
+# CZ: Každé 2 minuty vyhodnotí výrobu FVE, spotřebu domu, baterii, síť a předpověď
+#     (Forecast.Solar) a přidá nebo ubere 1 kW výkonu elektrokotle (registr d.00 přes eBUS).
+#     Kotel běží v SAMOSTATNÉM režimu – bez eBUS povelu SetMode (ten Protherm Ray přepne
+#     do režimu, kde topí jen 1 kW). Požadavek topení dává Shelly na svorce RT24, výkon
+#     registr d.00 (PartloadHcKW), max. teplota výstupu registr d.71 (FlowsetHcMax).
+# EN: Every 2 minutes evaluates PV production, house load, battery, grid and forecast
+#     (Forecast.Solar) and adds/removes 1 kW of boiler power (register d.00 via eBUS).
+#     The boiler runs in STANDALONE mode – never send SetMode (it locks the Protherm Ray
+#     to 1 kW). Heat demand = Shelly relay on terminal RT24, power = d.00 (PartloadHcKW),
+#     max flow temperature = d.71 (FlowsetHcMax).
+#
+# Entity names below are from a SolaX X3-Hybrid-G4 (wills106/homeassistant-solax-modbus)
+# and Forecast.Solar – replace them with your own.
+
+id: elektrokotel_prebytky
+alias: Elektrokotel – řízení podle přebytků FVE
+description: >-
+  Každé 2 minuty: podle výroby FVE, spotřeby domu, baterie, sítě a předpovědi (Forecast.Solar)
+  přidá nebo ubere 1 kW výkonu elektrokotle (d.00 přes eBUS). Přetok omezený limitem střídače –
+  když přetok narazí na limit, střídač škrtí a je bezpečné přidat. Kotel se řídí jako samostatný
+  (bez eBUS povelu SetMode – ten kotel omezoval na 1 kW): požadavek topení dává Shelly na RT24,
+  výkon registr d.00, max. teplota výstupu registr d.71. Každý běh obnoví sepnutí Shelly na RT24
+  (auto-vypnutí po 10 min = pojistka). Hlídá i teplotu v domě: nad nastavenou mez nepřidává a při
+  překročení o 0,5 °C ubírá – tím se nehádá s termostatem plynového kotle.
+mode: single
+
+triggers:
+  - trigger: time_pattern
+    minutes: "/2"
+  - trigger: state
+    entity_id:
+      - input_boolean.elektrokotel_rizeni_podle_prebytku
+      - input_number.elektrokotel_max_vykon
+  - trigger: homeassistant
+    event: start
+  - trigger: numeric_state
+    entity_id: sensor.prumerna_teplota_v_dome
+    above: input_number.elektrokotel_max_teplota_v_dome
+  - trigger: state
+    entity_id: sun.sun
+    to: above_horizon
+
+# CZ: běží jen ve dne, nebo dokud je stupeň > 0 (aby uměl kotel večer vypnout)
+# EN: runs only during daylight, or while the stage is > 0 (so it can switch off at dusk)
+conditions:
+  - condition: template
+    value_template: >-
+      {{ is_state('sun.sun','above_horizon')
+         or (states('input_number.elektrokotel_aktualni_stupen') | int(0)) > 0 }}
+
+# CZ: POŘADÍ proměnných je důležité – HA je vyhodnocuje shora dolů.
+# EN: ORDER of variables matters – HA evaluates them top to bottom.
+variables:
+  enabled: "{{ is_state('input_boolean.elektrokotel_rizeni_podle_prebytku','on') }}"
+  cur: "{{ states('input_number.elektrokotel_aktualni_stupen') | int(0) }}"
+  maxkw: "{{ states('input_number.elektrokotel_max_vykon') | int(6) }}"
+  min_soc: "{{ states('input_number.elektrokotel_min_nabiti_baterie') | float(95) }}"
+  rezerva: "{{ states('input_number.elektrokotel_rezerva') | float(300) }}"
+  teplota: "{{ states('input_number.elektrokotel_teplota_vystupu') | int(55) }}"
+  pv: "{{ states('sensor.solax_inverter_pv_power_total') | float(0) }}"
+  load: "{{ states('sensor.solax_inverter_house_load') | float(0) }}"
+  # + = nabíjení / charging, − = vybíjení / discharging
+  bat: "{{ states('sensor.solax_inverter_battery_power_charge') | float(0) }}"
+  soc: "{{ states('sensor.solax_energy_dashboard_solax_battery_soc') | float(0) }}"
+  grid_import: "{{ states('sensor.solax_inverter_grid_import') | float(0) }}"
+  data_ok: >-
+    {{ has_value('sensor.solax_inverter_pv_power_total')
+       and has_value('sensor.solax_inverter_house_load')
+       and has_value('sensor.solax_inverter_battery_power_charge')
+       and has_value('sensor.solax_energy_dashboard_solax_battery_soc') }}
+  headroom: "{{ pv - load }}"
+  since_change: >-
+    {% set ts = state_attr('input_datetime.elektrokotel_posledni_zmena_stupne','timestamp') %}
+    {{ ((now().timestamp() - (ts | float(0))) / 60) | round(1) if ts is not none else 9999 }}
+  grid_export: "{{ states('sensor.solax_inverter_grid_export') | float(0) }}"
+  export_limit: "{{ states('number.solax_inverter_export_control_user_limit') | float(0) }}"
+  forecast_now: "{{ states('sensor.power_production_now') | float(0) }}"
+  # CZ: střídač škrtí výrobu na limitu přetoku → skutečný přebytek je větší, než vidíme
+  # EN: inverter is curtailing at the export limit → real surplus is larger than visible
+  capped: "{{ export_limit > 0 and grid_export >= (export_limit - 150) }}"
+  # spotřeba domu bez kotle / house load without the boiler
+  zaklad: "{{ [load - cur * 1000, 0] | max }}"
+  forecast_ok: "{{ forecast_now >= zaklad + (cur + 1) * 1000 + rezerva }}"
+  # CZ: čekání mezi stupni (min): 4 když je jasné, že výkon je, jinak 10
+  # EN: wait between stages (min): 4 when surplus is obvious, otherwise 10
+  cekani: "{{ 4 if (capped and forecast_ok) else 10 }}"
+  # CZ: „sonda“ – bez povoleného přetoku a s plnou baterií nevidíme přebytek, tak zkusíme přidat
+  # EN: "probe" – with export disabled and a full battery the surplus is invisible, so try adding
+  sonda: "{{ export_limit <= 0 and soc >= 99 and pv >= 500 and bat > -rezerva and grid_import < rezerva }}"
+  teplota_domu: "{{ states('sensor.prumerna_teplota_v_dome') | float(0) }}"
+  max_teplota_domu: "{{ states('input_number.elektrokotel_max_teplota_v_dome') | float(24) }}"
+  dum_prehraty: "{{ has_value('sensor.prumerna_teplota_v_dome') and teplota_domu >= (max_teplota_domu + 0.5) }}"
+  dum_ok: "{{ (not has_value('sensor.prumerna_teplota_v_dome')) or teplota_domu < max_teplota_domu }}"
+  ubrat: "{{ cur > 0 and (grid_import > rezerva or bat < -rezerva or soc < (min_soc - 3) or dum_prehraty) }}"
+  pridat: >-
+    {{ cur < maxkw and dum_ok and soc >= min_soc and since_change >= cekani
+       and ( headroom >= (1000 + rezerva) or capped or sonda ) }}
+  novy: >-
+    {% if not enabled or not data_ok %}0{% elif ubrat %}{{ cur - 1 }}{% elif pridat %}{{ cur + 1 }}{% else %}{{ cur }}{% endif %}
+
+actions:
+  # 1) změna stupně → zápis d.00 / stage change → write d.00
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ (novy | int) != (cur | int) }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ (novy | int) > 0 }}"
+            then:
+              - action: mqtt.publish
+                data:
+                  topic: ebusd/bai/PartloadHcKW/set
+                  payload: "{{ novy | int }}"
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.elektrokotel_aktualni_stupen
+            data:
+              value: "{{ novy | int }}"
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.elektrokotel_posledni_zmena_stupne
+            data:
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+  # 2) požadavek topení = Shelly na RT24 (heartbeat každé 2 min, Shelly má auto-off 10 min)
+  #    heat demand = Shelly on RT24 (heartbeat every 2 min, Shelly auto-off 10 min)
+  - if:
+      - condition: template
+        value_template: "{{ (novy | int) > 0 }}"
+    then:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.elektrokotel_rt24
+    else:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.elektrokotel_rt24
