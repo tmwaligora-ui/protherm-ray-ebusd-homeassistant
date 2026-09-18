@@ -1,0 +1,126 @@
+# Dashboard „Elektrokotel“ (sections view) – zjednodušená verze / simplified version
+# CZ: Nastavení → Dashboardy → Přidat dashboard → „Nový dashboard od nuly“ → ⋮ → Raw configuration editor → vložit.
+# EN: Settings → Dashboards → Add dashboard → "New dashboard from scratch" → ⋮ → Raw configuration editor → paste.
+
+title: Elektrokotel
+views:
+  - title: Kotel
+    path: kotel
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Řízení
+          - type: entities
+            entities:
+              - entity: input_boolean.elektrokotel_rizeni_podle_prebytku
+                name: Řídit kotel podle přebytků
+              - entity: input_number.elektrokotel_aktualni_stupen
+                name: Aktuální stupeň (řízený)
+              - entity: input_datetime.elektrokotel_posledni_zmena_stupne
+                name: Poslední změna stupně
+              - type: divider
+              - entity: input_number.elektrokotel_max_vykon
+                name: Max. výkon kotle
+              - entity: input_number.elektrokotel_min_nabiti_baterie
+                name: Nejdřív nabít baterii na
+              - entity: input_number.elektrokotel_teplota_vystupu
+                name: Teplota výstupu při topení
+              - entity: input_number.elektrokotel_rezerva
+                name: Rezerva (tolerance odběru ze sítě)
+              - entity: input_number.elektrokotel_max_teplota_v_dome
+                name: Netopit, když je v domě víc než
+              - entity: sensor.prumerna_teplota_v_dome
+                name: Průměrná teplota v domě
+          - type: markdown
+            content: >-
+              **Jak to funguje:** každé 2 minuty se porovná výroba FVE se spotřebou domu.
+              Když je přebytek ≥ 1 kW + rezerva (nebo střídač škrtí na limitu přetoku),
+              přidá se 1 kW. Když se bere ze sítě nebo z baterie, 1 kW se ubere.
+              Kotel dostává požadavek přes svorku RT24 (Shelly) a výkon přes eBUS (d.00).
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Kotel Protherm Ray
+          - type: entities
+            entities:
+              - entity: switch.elektrokotel_rt24
+                name: Požadavek topení (RT24)
+              - entity: sensor.heating_ebusd_bai_statenumber
+                name: Stavový kód (S.xx)
+              - entity: binary_sensor.elektrokotel_topi
+                name: Topí teď
+              - entity: binary_sensor.elektrokotel_cerpadlo_bezi
+                name: Čerpadlo kotle běží
+              - entity: sensor.elektrokotel_prikon_odhad
+                name: Aktuální příkon (odhad z d.00)
+              - entity: sensor.heating_ebusd_bai_partloadhckw
+                name: Nastavený max. výkon (d.00)
+              - entity: sensor.heating_ebusd_bai_extflowtempdesiredmin
+                name: Požadovaná teplota výstupu
+              - entity: sensor.heating_ebusd_bai_flowtemp_temp
+                name: Teplota výstupu
+              - entity: sensor.heating_ebusd_bai_waterpressure_press
+                name: Tlak vody v topení
+              - entity: sensor.heating_ebusd_bai_dcroomthermostat
+                name: Svorka RT24 sepnutá
+              - entity: sensor.heating_ebusd_bai_ebusheatcontrol
+                name: Řízen po eBUS (musí být „no“)
+              - entity: sensor.heating_ebusd_bai_hchours
+                name: Provozní hodiny topení
+              - entity: sensor.heating_ebusd_bai_currenterror_error
+                name: Aktuální chyba
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Fotovoltaika teď
+          - type: entities
+            entities:
+              - entity: sensor.solax_inverter_pv_power_total
+                name: Výroba FVE
+              - entity: sensor.solax_inverter_house_load
+                name: Spotřeba domu
+              - entity: sensor.solax_inverter_battery_power_charge
+                name: Baterie (+ nabíjí / − vybíjí)
+              - entity: sensor.solax_energy_dashboard_solax_battery_soc
+                name: Nabití baterie
+              - entity: sensor.solax_inverter_grid_import
+                name: Odběr ze sítě
+              - entity: sensor.solax_inverter_grid_export
+                name: Přetok do sítě
+              - entity: number.solax_inverter_export_control_user_limit
+                name: Povolený přetok (limit střídače)
+              - entity: sensor.power_production_now
+                name: Předpověď výroby teď (Forecast.Solar)
+              - entity: sensor.energy_production_today_remaining
+                name: Předpověď – zbývá dnes
+
+      - type: grid
+        column_span: 3
+        cards:
+          - type: history-graph
+            title: Výkon kotle vs. FVE (24 h)
+            hours_to_show: 24
+            entities:
+              - entity: input_number.elektrokotel_aktualni_stupen
+                name: Stupeň kotle (kW)
+              - entity: sensor.solax_inverter_pv_power_total
+                name: Výroba FVE (W)
+              - entity: sensor.solax_inverter_house_load
+                name: Spotřeba domu (W)
+              - entity: sensor.solax_inverter_grid_export
+                name: Přetok (W)
+          - type: history-graph
+            title: Teploty kotle (24 h)
+            hours_to_show: 24
+            entities:
+              - entity: sensor.heating_ebusd_bai_flowtemp_temp
+                name: Výstup
+              - entity: sensor.heating_ebusd_bai_extflowtempdesiredmin
+                name: Požadovaná
+              - entity: sensor.prumerna_teplota_v_dome
+                name: Dům
