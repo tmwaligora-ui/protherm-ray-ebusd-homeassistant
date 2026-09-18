@@ -1,0 +1,22 @@
+# ebusd add-on (LukasGrebe/ha-addons) – options
+# CZ: Nastavení → Doplňky → ebusd → Konfigurace (YAML).
+# EN: Settings → Add-ons → ebusd → Configuration (YAML).
+
+# eBUS Adapter Shield C6 přes Wi‑Fi / over Wi‑Fi (nastav adaptéru rezervaci IP na routeru!)
+network_device: "ens:ADAPTER_IP:9999"
+
+# nepřepisovat náš mqtt-hassio.cfg / do not overwrite our mqtt-hassio.cfg
+seed_mqtt_cfg: false
+
+commandline_options:
+  - "--mqttint=/config/mqtt-hassio.cfg"
+  - "--mqttjson"
+  - "-s"
+  - "--httpport=8889"          # HTTP API (http://HA_IP:8889/data/bai/) – hodí se na ladění / handy for debugging
+  - "--pollinterval=3"         # rychlejší polling; priority zpráv viz bai.inc.patch.sh
+  - "--configpath=/config/ebusd-configuration"   # lokální (upravená) konfigurace / local (patched) config
+  - "--accesslevel=*"          # zápis „install“ registrů (d.00, d.71) / needed to write install-level registers
+  - "--scanconfig=08"          # CZ: skenovat rovnou kotel (08) – jinak ebusd po startu kotel 3–4 min nenajde
+                               # EN: scan the boiler address directly – otherwise ebusd takes 3–4 min to find it
+
+# Síť add-onu (Network): 8888/tcp → 8888, 8889/tcp → 8889
